@@ -1,5 +1,4 @@
 #include "microshell.h"
-#include "stdio.h"
 #include <sys/wait.h>
 
 int print_err(char *error)
@@ -77,7 +76,7 @@ int main(int argc, char **argv,char **envp)
 			i++;
 		if (!strcmp(*argv, "cd"))
 			status = exec_cd(argv, i);
-		else
+		else if (i)
 			status = exec_cmd(argv, i, envp);
 	}
 	return (status);
