@@ -1,5 +1,6 @@
 #include "microshell.h"
 #include "stdio.h"
+#include <sys/wait.h>
 
 int print_err(char *error)
 {
@@ -15,7 +16,6 @@ int exec_cd(char **argv, int i)
 {
 	if (i != 2)
 		return (print_err("error: cd: bad arguments\n"));
-	printf("int i = %d argv[1]=%s\n", i, argv[1]);
 	if (chdir(argv[1]) == -1)
 	{
 		print_err("error: cd: cannot change directory to ");
@@ -29,8 +29,9 @@ int exec_cd(char **argv, int i)
 int	exec_cmd(char **argv, int i, char **envp)
 {
 	int pid;
+	int status;
 	int pipe_fds[2];
-	int is_piped = argv[i] && strcmp(argv[i], "|");
+	int is_piped = argv[i] && !strcmp(argv[i], "|");
 
 	if (is_piped && pipe(pipe_fds) == -1)
 		return (print_err("error: fatal"));
@@ -39,7 +40,8 @@ int	exec_cmd(char **argv, int i, char **envp)
 		return (print_err("error: fatal"));
 	else if (pid == 0)
 	{
-		if (is_piped && dup2(pipe_fds[1], STDOUT_FILENO) == -1 && close(pipe_fds[0]) == -1)
+		argv[i] = 0;
+		if (is_piped && (dup2(pipe_fds[1], STDOUT_FILENO) == -1 || close(pipe_fds[0]) == -1 || close(pipe_fds[1]) == -1))
 			return (print_err("error: fatal\n"));
 		execve(argv[0], argv, envp);
 		print_err("error: cannot execute ");
@@ -49,10 +51,13 @@ int	exec_cmd(char **argv, int i, char **envp)
 	}
 	else
 	{
-		waitpid(pid, NULL, 0);
-		if (is_piped && dup2(pipe_fds[0], STDOUT_FILENO) == -1 && close(pipe_fds[0]) == -1 && close(pipe_fds[1]) == -1)
+		waitpid(pid, &status, 0);
+		if (is_piped && (dup2(pipe_fds[0], STDIN_FILENO) == -1 || close(pipe_fds[0]) == -1 || close(pipe_fds[1]) == -1))
 			return (print_err("error: fatal\n"));
-		return(0);
+		if (WIFEXITED(status))
+			return (WEXITSTATUS(status));
+		else
+			return (-1);
 	}
 	return (1);
 }
